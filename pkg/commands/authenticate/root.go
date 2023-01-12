@@ -28,17 +28,17 @@ type RootCommand struct {
 // AuthRemediation is a generic remediation message for an error authorizing.
 const AuthRemediation = "Please re-run the command. If the problem persists, please file an issue: https://github.com/fastly/cli/issues/new?labels=bug&template=bug_report.md"
 
-// Auth0CLIAppURL is the Auth0 device code URL.
-const Auth0CLIAppURL = "https://dev-37kjpso9.us.auth0.com"
+// AuthProviderCLIAppURL is the auth provider's device code URL.
+const AuthProviderCLIAppURL = "https://dev-37kjpso9.us.auth0.com"
 
-// Auth0ClientID is the Auth0 Client ID.
-const Auth0ClientID = "7TAnqT4DTDhJTyXk9aXcuD48JoHRXK2X"
+// AuthProviderClientID is the auth provider's Client ID.
+const AuthProviderClientID = "7TAnqT4DTDhJTyXk9aXcuD48JoHRXK2X"
 
-// Auth0Audience is the unique identifier of the API your app wants to access.
-const Auth0Audience = "https://api.secretcdn-stg.net/"
+// AuthProviderAudience is the unique identifier of the API your app wants to access.
+const AuthProviderAudience = "https://api.secretcdn-stg.net/"
 
-// Auth0RedirectURL is the endpoint Auth0 will pass an authorization code to.
-const Auth0RedirectURL = "http://localhost:8080/callback"
+// AuthProviderRedirectURL is the endpoint the auth provider will pass an authorization code to.
+const AuthProviderRedirectURL = "http://localhost:8080/callback"
 
 // NewRootCommand returns a new command registered in the parent.
 func NewRootCommand(parent cmd.Registerer, g *global.Data) *RootCommand {
@@ -147,7 +147,7 @@ type server struct {
 
 func (s *server) startServer() error {
 	// TODO: Consider using a random port to avoid local network conflicts.
-	// Chat with Auth0 about how to use a random port.
+	// Chat with authentication provider about how to use a random port.
 	err := http.ListenAndServe(":8080", s.router)
 	if err != nil {
 		return fsterr.RemediationError{
@@ -237,7 +237,7 @@ func generateAuthorizationURL(verifier *oidc.S256Verifier) (string, error) {
 			"&response_type=code&client_id=%s"+
 			"&code_challenge=%s"+
 			"&code_challenge_method=S256&redirect_uri=%s",
-		Auth0CLIAppURL, Auth0Audience, Auth0ClientID, challenge, Auth0RedirectURL)
+		AuthProviderCLIAppURL, AuthProviderAudience, AuthProviderClientID, challenge, AuthProviderRedirectURL)
 
 	return authorizationURL, nil
 }
@@ -247,13 +247,13 @@ func getJWT(codeVerifier, authorizationCode string) (JWT, error) {
 
 	payload := fmt.Sprintf(
 		"grant_type=authorization_code&client_id=%s&code_verifier=%s&code=%s&redirect_uri=%s",
-		Auth0ClientID,
+		AuthProviderClientID,
 		codeVerifier,
 		authorizationCode,
 		"http://localhost:8080", // NOTE: not redirected to, just a security check.
 	)
 
-	req, err := http.NewRequest("POST", Auth0CLIAppURL+path, strings.NewReader(payload))
+	req, err := http.NewRequest("POST", AuthProviderCLIAppURL+path, strings.NewReader(payload))
 	if err != nil {
 		return JWT{}, err
 	}
@@ -285,7 +285,7 @@ func getJWT(codeVerifier, authorizationCode string) (JWT, error) {
 	return j, nil
 }
 
-// JWT is the API response for an Auth0 Token request.
+// JWT is the API response for a Token request.
 type JWT struct {
 	// AccessToken can be exchanged for a Fastly API token.
 	AccessToken string `json:"access_token"`
@@ -302,7 +302,7 @@ func verifyJWTSignature(token string) (claims map[string]any, err error) {
 
 	// NOTE: The last argument is optional and is for validating the JWKs endpoint
 	// (which we don't need to do, so we pass an empty string)
-	keySet, err := jwt.NewJSONWebKeySet(ctx, Auth0CLIAppURL+"/.well-known/jwks.json", "")
+	keySet, err := jwt.NewJSONWebKeySet(ctx, AuthProviderCLIAppURL+"/.well-known/jwks.json", "")
 	if err != nil {
 		return claims, fmt.Errorf("failed to verify signature of access token: %w", err)
 	}
