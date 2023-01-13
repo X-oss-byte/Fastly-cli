@@ -1,3 +1,5 @@
+// NOTE: https://keycloak.ext.awsuse2.dev.k8s.secretcdn.net/realms/fastly/.well-known/openid-configuration
+
 package authenticate
 
 import (
@@ -29,10 +31,10 @@ type RootCommand struct {
 const AuthRemediation = "Please re-run the command. If the problem persists, please file an issue: https://github.com/fastly/cli/issues/new?labels=bug&template=bug_report.md"
 
 // AuthProviderCLIAppURL is the auth provider's device code URL.
-const AuthProviderCLIAppURL = "https://dev-37kjpso9.us.auth0.com"
+const AuthProviderCLIAppURL = "https://keycloak.stg.k8s.secretcdn.net"
 
 // AuthProviderClientID is the auth provider's Client ID.
-const AuthProviderClientID = "7TAnqT4DTDhJTyXk9aXcuD48JoHRXK2X"
+const AuthProviderClientID = "fastly-cli"
 
 // AuthProviderAudience is the unique identifier of the API your app wants to access.
 const AuthProviderAudience = "https://api.secretcdn-stg.net/"
@@ -185,17 +187,7 @@ func (s *server) handleCallback() http.HandlerFunc {
 			return
 		}
 
-		// FIXME: Patrick to move the session token inside of the access_token.
-		// Currently it's inside of the id_token!
-		_, err = verifyJWTSignature(j.AccessToken)
-		if err != nil {
-			s.result <- authorizationResult{
-				err: err,
-			}
-			return
-		}
-
-		claims, err := verifyJWTSignature(j.IDToken)
+		claims, err := verifyJWTSignature(j.AccessToken)
 		if err != nil {
 			s.result <- authorizationResult{
 				err: err,
@@ -232,7 +224,7 @@ func generateAuthorizationURL(verifier *oidc.S256Verifier) (string, error) {
 	}
 
 	authorizationURL := fmt.Sprintf(
-		"%s/authorize?audience=%s"+
+		"%s/realms/fastly/protocol/openid-connect/auth?audience=%s"+
 			"&scope=openid"+
 			"&response_type=code&client_id=%s"+
 			"&code_challenge=%s"+
@@ -243,14 +235,14 @@ func generateAuthorizationURL(verifier *oidc.S256Verifier) (string, error) {
 }
 
 func getJWT(codeVerifier, authorizationCode string) (JWT, error) {
-	path := "/oauth/token"
+	path := "/realms/fastly/protocol/openid-connect/token"
 
 	payload := fmt.Sprintf(
 		"grant_type=authorization_code&client_id=%s&code_verifier=%s&code=%s&redirect_uri=%s",
 		AuthProviderClientID,
 		codeVerifier,
 		authorizationCode,
-		"http://localhost:8080", // NOTE: not redirected to, just a security check.
+		"http://localhost:8080/callback", // NOTE: not redirected to, just a security check.
 	)
 
 	req, err := http.NewRequest("POST", AuthProviderCLIAppURL+path, strings.NewReader(payload))
@@ -275,7 +267,6 @@ func getJWT(codeVerifier, authorizationCode string) (JWT, error) {
 		return JWT{}, err
 	}
 
-	// NOTE: I use the identifier `j` to avoid overlap with the `jwt` package.
 	var j JWT
 	err = json.Unmarshal(body, &j)
 	if err != nil {
@@ -299,34 +290,30 @@ type JWT struct {
 
 func verifyJWTSignature(token string) (claims map[string]any, err error) {
 	ctx := context.Background()
+	path := "/realms/fastly/protocol/openid-connect/certs"
 
 	// NOTE: The last argument is optional and is for validating the JWKs endpoint
 	// (which we don't need to do, so we pass an empty string)
-	keySet, err := jwt.NewJSONWebKeySet(ctx, AuthProviderCLIAppURL+"/.well-known/jwks.json", "")
+	keySet, err := jwt.NewJSONWebKeySet(ctx, AuthProviderCLIAppURL+path, "")
 	if err != nil {
 		return claims, fmt.Errorf("failed to verify signature of access token: %w", err)
 	}
 
 	claims, err = keySet.VerifySignature(ctx, token)
 	if err != nil {
-		return claims, fmt.Errorf("failed to verify signature of access token: %w", err)
+		return nil, fmt.Errorf("failed to verify signature of access token: %w", err)
 	}
 
 	return claims, nil
 }
 
 func extractSessionToken(claims map[string]any) (string, error) {
-	if i, ok := claims["ui_token"]; ok {
-		if m, ok := i.(map[string]any); ok {
-			if v, ok := m["access_token"]; ok {
-				if t, ok := v.(string); ok {
-					if t != "" {
-						return t, nil
-					}
-				}
+	if i, ok := claims["legacy_session_token"]; ok {
+		if t, ok := i.(string); ok {
+			if t != "" {
+				return t, nil
 			}
 		}
 	}
-
 	return "", fmt.Errorf("failed to extract session token from JWT custom claim")
 }
