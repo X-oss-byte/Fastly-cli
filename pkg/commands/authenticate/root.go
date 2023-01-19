@@ -31,7 +31,7 @@ type RootCommand struct {
 const AuthRemediation = "Please re-run the command. If the problem persists, please file an issue: https://github.com/fastly/cli/issues/new?labels=bug&template=bug_report.md"
 
 // AuthProviderCLIAppURL is the auth provider's device code URL.
-const AuthProviderCLIAppURL = "https://keycloak.stg.k8s.secretcdn.net"
+const AuthProviderCLIAppURL = "https://accounts.secretcdn-stg.net"
 
 // AuthProviderClientID is the auth provider's Client ID.
 const AuthProviderClientID = "fastly-cli"
