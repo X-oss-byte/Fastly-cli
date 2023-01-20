@@ -195,6 +195,9 @@ func (s *server) handleCallback() http.HandlerFunc {
 			return
 		}
 
+		fmt.Printf("jwt: %+v\n", j)
+		fmt.Printf("claims: %+v\n", claims)
+
 		sessionToken, err := extractSessionToken(claims)
 		if err != nil {
 			s.result <- authorizationResult{
