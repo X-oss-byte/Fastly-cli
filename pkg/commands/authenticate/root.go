@@ -9,9 +9,10 @@ import (
 	"strings"
 
 	"github.com/fastly/cli/pkg/cmd"
-	"github.com/fastly/cli/pkg/debug"
+	"github.com/fastly/cli/pkg/config"
 	fsterr "github.com/fastly/cli/pkg/errors"
 	"github.com/fastly/cli/pkg/global"
+	"github.com/fastly/cli/pkg/profile"
 	"github.com/fastly/cli/pkg/text"
 	"github.com/hashicorp/cap/jwt"
 	"github.com/hashicorp/cap/oidc"
@@ -98,18 +99,42 @@ func (c *RootCommand) Exec(_ io.Reader, out io.Writer) error {
 	}
 
 	ar := <-result
-	if ar.err != nil || ar.jwt.AccessToken == "" {
+	if ar.err != nil || ar.sessionToken == "" {
 		return fsterr.RemediationError{
 			Inner:       fmt.Errorf("failed to authorize: %w", ar.err),
 			Remediation: AuthRemediation,
 		}
 	}
 
-	// TODO: call Fastly API's /internal/poc/authn/callback endpoint.
-	// This is to exchange the access token for an API token.
+	text.Success(out, "Session token (persisted to your local configuration): %s", ar.sessionToken)
 
-	// TODO: Persist token to application configuration.
-	// How does this work with `fastly profile` (set on the default)?
+	profileName, _ := profile.Default(c.Globals.Config.Profiles)
+	if profileName == "" {
+		// FIXME: Return a more appropriate remediation.
+		return fsterr.RemediationError{
+			Inner:       fmt.Errorf("no profiles available"),
+			Remediation: fsterr.ProfileRemediation,
+		}
+	}
+
+	ps, ok := profile.Edit(profileName, c.Globals.Config.Profiles, func(p *config.Profile) {
+		p.Token = ar.sessionToken
+	})
+	if !ok {
+		return fsterr.RemediationError{
+			Inner:       fmt.Errorf("failed to update default profile with new session token"),
+			Remediation: "Run `fastly profile update` and manually paste in the session token.",
+		}
+	}
+	c.Globals.Config.Profiles = ps
+
+	if err := c.Globals.Config.Write(c.Globals.Path); err != nil {
+		c.Globals.ErrLog.Add(err)
+		return fmt.Errorf("error saving config file: %w", err)
+	}
+
+	// FIXME: Don't just update the default profile.
+	// Allow user to configure this via a --profile flag.
 
 	return nil
 }
@@ -149,26 +174,72 @@ func (s *server) handleCallback() http.HandlerFunc {
 		}
 
 		// Exchange the authorization code and the code verifier for a JWT.
+		// NOTE: I use the identifier `j` to avoid overlap with the `jwt` package.
 		codeVerifier := s.verifier.Verifier()
-		jwt, err := getJWT(codeVerifier, authorizationCode)
-		if err != nil || jwt.AccessToken == "" {
-			fmt.Fprint(w, "ERROR: no access token returned\n")
+		j, err := getJWT(codeVerifier, authorizationCode)
+		if err != nil || j.AccessToken == "" || j.IDToken == "" {
+			fmt.Fprint(w, "ERROR: failed to exchange code for JWT\n")
 			s.result <- authorizationResult{
-				err: fmt.Errorf("no access token returned"),
+				err: fmt.Errorf("failed to exchange code for JWT"),
+			}
+			return
+		}
+
+		// FIXME: Patrick to move the session token inside of the access_token.
+		// Currently it's inside of the id_token!
+		_, err = verifyJWTSignature(j.AccessToken)
+		if err != nil {
+			s.result <- authorizationResult{
+				err: err,
+			}
+			return
+		}
+
+		claims, err := verifyJWTSignature(j.IDToken)
+		if err != nil {
+			s.result <- authorizationResult{
+				err: err,
+			}
+			return
+		}
+
+		sessionToken, err := extractSessionToken(claims)
+		if err != nil {
+			s.result <- authorizationResult{
+				err: err,
 			}
 			return
 		}
 
 		fmt.Fprint(w, "Authenticated successfully. Please close this page and return to the Fastly CLI in your terminal.")
 		s.result <- authorizationResult{
-			jwt: jwt,
+			jwt:          j,
+			sessionToken: sessionToken,
 		}
 	}
 }
 
 type authorizationResult struct {
-	err error
-	jwt JWT
+	err          error
+	jwt          JWT
+	sessionToken string
+}
+
+func generateAuthorizationURL(verifier *oidc.S256Verifier) (string, error) {
+	challenge, err := oidc.CreateCodeChallenge(verifier)
+	if err != nil {
+		return "", err
+	}
+
+	authorizationURL := fmt.Sprintf(
+		"%s/authorize?audience=%s"+
+			"&scope=openid"+
+			"&response_type=code&client_id=%s"+
+			"&code_challenge=%s"+
+			"&code_challenge_method=S256&redirect_uri=%s",
+		Auth0CLIAppURL, Auth0Audience, Auth0ClientID, challenge, Auth0RedirectURL)
+
+	return authorizationURL, nil
 }
 
 func getJWT(codeVerifier, authorizationCode string) (JWT, error) {
@@ -211,35 +282,7 @@ func getJWT(codeVerifier, authorizationCode string) (JWT, error) {
 		return JWT{}, err
 	}
 
-	err = verifyJWTSignature(j.AccessToken)
-	if err != nil {
-		return JWT{}, err
-	}
-
-	// FIXME: Delete this line.
-	_ = debug.PrintStruct(j)
-
 	return j, nil
-}
-
-func verifyJWTSignature(accessToken string) error {
-	ctx := context.Background()
-
-	keySet, err := jwt.NewJSONWebKeySet(ctx, Auth0CLIAppURL+"/.well-known/jwks.json", "")
-	if err != nil {
-		return fmt.Errorf("failed to verify signature of access token: %w", err)
-	}
-
-	token := accessToken
-	claims, err := keySet.VerifySignature(ctx, token)
-	if err != nil {
-		return fmt.Errorf("failed to verify signature of access token: %w", err)
-	}
-
-	// FIXME: Delete this line.
-	fmt.Printf("claims:\n%s\n\n", claims)
-
-	return nil
 }
 
 // JWT is the API response for an Auth0 Token request.
@@ -254,19 +297,36 @@ type JWT struct {
 	TokenType string `json:"token_type"`
 }
 
-func generateAuthorizationURL(verifier *oidc.S256Verifier) (string, error) {
-	challenge, err := oidc.CreateCodeChallenge(verifier)
+func verifyJWTSignature(token string) (claims map[string]any, err error) {
+	ctx := context.Background()
+
+	// NOTE: The last argument is optional and is for validating the JWKs endpoint
+	// (which we don't need to do, so we pass an empty string)
+	keySet, err := jwt.NewJSONWebKeySet(ctx, Auth0CLIAppURL+"/.well-known/jwks.json", "")
 	if err != nil {
-		return "", err
+		return claims, fmt.Errorf("failed to verify signature of access token: %w", err)
 	}
 
-	authorizationURL := fmt.Sprintf(
-		"%s/authorize?audience=%s"+
-			"&scope=openid"+
-			"&response_type=code&client_id=%s"+
-			"&code_challenge=%s"+
-			"&code_challenge_method=S256&redirect_uri=%s",
-		Auth0CLIAppURL, Auth0Audience, Auth0ClientID, challenge, Auth0RedirectURL)
+	claims, err = keySet.VerifySignature(ctx, token)
+	if err != nil {
+		return claims, fmt.Errorf("failed to verify signature of access token: %w", err)
+	}
 
-	return authorizationURL, nil
+	return claims, nil
+}
+
+func extractSessionToken(claims map[string]any) (string, error) {
+	if i, ok := claims["ui_token"]; ok {
+		if m, ok := i.(map[string]any); ok {
+			if v, ok := m["access_token"]; ok {
+				if t, ok := v.(string); ok {
+					if t != "" {
+						return t, nil
+					}
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("failed to extract session token from JWT custom claim")
 }
