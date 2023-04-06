@@ -1,6 +1,7 @@
 package authenticate
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,7 +13,9 @@ import (
 	fsterr "github.com/fastly/cli/pkg/errors"
 	"github.com/fastly/cli/pkg/global"
 	"github.com/fastly/cli/pkg/text"
+	"github.com/hashicorp/cap/jwt"
 	"github.com/hashicorp/cap/oidc"
+	"github.com/skratchdot/open-golang/open"
 )
 
 // RootCommand is the parent command for all subcommands in this package.
@@ -87,7 +90,12 @@ func (c *RootCommand) Exec(_ io.Reader, out io.Writer) error {
 	}
 
 	text.Break(out)
-	text.Description(out, "Please open the following URL", authorizationURL)
+	text.Description(out, "We're opening the following URL in your default web browser so you may authenticate with Fastly", authorizationURL)
+
+	err = open.Run(authorizationURL)
+	if err != nil {
+		return fmt.Errorf("failed to open your default browser: %w", err)
+	}
 
 	ar := <-result
 	if ar.err != nil || ar.jwt.AccessToken == "" {
@@ -187,21 +195,51 @@ func getJWT(codeVerifier, authorizationCode string) (JWT, error) {
 	}
 	defer res.Body.Close()
 
+	if res.StatusCode != http.StatusOK {
+		return JWT{}, fmt.Errorf("failed to exchange code for jwt (status: %s)", res.Status)
+	}
+
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return JWT{}, err
 	}
 
-	var jwt JWT
-	err = json.Unmarshal(body, &jwt)
+	// NOTE: I use the identifier `j` to avoid overlap with the `jwt` package.
+	var j JWT
+	err = json.Unmarshal(body, &j)
+	if err != nil {
+		return JWT{}, err
+	}
+
+	err = verifyJWTSignature(j.AccessToken)
 	if err != nil {
 		return JWT{}, err
 	}
 
 	// FIXME: Delete this line.
-	_ = debug.PrintStruct(jwt)
+	_ = debug.PrintStruct(j)
 
-	return jwt, nil
+	return j, nil
+}
+
+func verifyJWTSignature(accessToken string) error {
+	ctx := context.Background()
+
+	keySet, err := jwt.NewJSONWebKeySet(ctx, Auth0CLIAppURL+"/.well-known/jwks.json", "")
+	if err != nil {
+		return fmt.Errorf("failed to verify signature of access token: %w", err)
+	}
+
+	token := accessToken
+	claims, err := keySet.VerifySignature(ctx, token)
+	if err != nil {
+		return fmt.Errorf("failed to verify signature of access token: %w", err)
+	}
+
+	// FIXME: Delete this line.
+	fmt.Printf("claims:\n%s\n\n", claims)
+
+	return nil
 }
 
 // JWT is the API response for an Auth0 Token request.
