@@ -113,7 +113,7 @@ func Run(opts RunOpts) error {
 
 	token, source := g.Token()
 
-	// FIXME: Identify token expiry!
+	// FIXME: Identify access AND refresh token expiry!
 
 	// Ensure the user has configured an API token, otherwise trigger the
 	// authentication flow (unless calling one of the profile commands).
@@ -135,6 +135,8 @@ func Run(opts RunOpts) error {
 				if err != nil {
 					return fmt.Errorf("failed to authenticate: %w", err)
 				}
+				text.Break(opts.Stdout)
+
 				break
 			}
 		}
@@ -276,7 +278,7 @@ func determineProfile(manifestValue, flagValue string, profiles config.Profiles)
 // allowNoToken determines if the command to be executed is one that should work
 // even if there is no prior API token available.
 func allowNoToken(command string) bool {
-	if command == "version" || command == "whoami" || strings.HasPrefix(command, "profile ") {
+	if command == "version" || command == "config" || strings.HasPrefix(command, "profile ") {
 		return true
 	}
 	return false
