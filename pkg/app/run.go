@@ -257,7 +257,7 @@ func Run(opts RunOpts) error {
 	}
 
 	// Ensure the user has configured an API token, otherwise trigger the
-	// authentication flow (unless calling one of the profile commands).
+	// authentication flow (unless calling a tokenless command).
 	if tokenSource == lookup.SourceUndefined && commandRequiresToken(name) {
 		for _, command := range commands {
 			if command.Name() == "authenticate" {
