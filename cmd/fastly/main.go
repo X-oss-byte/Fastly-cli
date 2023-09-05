@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fastly/go-fastly/v8/fastly"
 	"github.com/fatih/color"
 
+	"github.com/fastly/cli/pkg/api"
 	"github.com/fastly/cli/pkg/app"
 	"github.com/fastly/cli/pkg/config"
 	fsterr "github.com/fastly/cli/pkg/errors"
@@ -31,11 +33,10 @@ func main() {
 	// the "real" versions that pull e.g. actual commandline arguments, the
 	// user's real environment, etc.
 	var (
-		args                    = os.Args[1:]
-		clientFactory           = app.FastlyAPIClient
-		httpClient              = &http.Client{Timeout: time.Minute * 2}
-		in            io.Reader = os.Stdin
-		out           io.Writer = sync.NewWriter(color.Output)
+		args                 = os.Args[1:]
+		httpClient           = &http.Client{Timeout: time.Minute * 2}
+		in         io.Reader = os.Stdin
+		out        io.Writer = sync.NewWriter(color.Output)
 	)
 
 	// We have to manually handle the inclusion of the verbose flag here because
@@ -86,7 +87,10 @@ func main() {
 
 	// Main is basically just a shim to call Run, so we do that here.
 	opts := app.RunOpts{
-		APIClient:  clientFactory,
+		APIClient: func(token, endpoint string) (api.Interface, error) {
+			client, err := fastly.NewClientForEndpoint(token, endpoint)
+			return client, err
+		},
 		Args:       args,
 		ConfigFile: cfg,
 		ConfigPath: config.FilePath,
