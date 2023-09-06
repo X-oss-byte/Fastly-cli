@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fastly/go-fastly/v8/fastly"
+
 	"github.com/fastly/cli/pkg/app"
-	fsterr "github.com/fastly/cli/pkg/errors"
 	"github.com/fastly/cli/pkg/mock"
 	"github.com/fastly/cli/pkg/testutil"
-	"github.com/fastly/go-fastly/v8/fastly"
 )
 
 func TestDomainCreate(t *testing.T) {
@@ -251,13 +251,8 @@ func TestDomainValidate(t *testing.T) {
 			WantError: "error parsing arguments: required flag --version not provided",
 		},
 		{
-			Name:      "validate missing --token flag",
-			Args:      args("domain validate --version 3"),
-			WantError: fsterr.ErrNoToken.Inner.Error(),
-		},
-		{
 			Name:      "validate missing --service-id flag",
-			Args:      args("domain validate --token 123 --version 3"),
+			Args:      args("domain validate --version 3"),
 			WantError: "error reading service: no service ID found",
 		},
 		{
@@ -265,7 +260,7 @@ func TestDomainValidate(t *testing.T) {
 			API: mock.API{
 				ListVersionsFn: testutil.ListVersions,
 			},
-			Args:      args("domain validate --service-id 123 --token 123 --version 3"),
+			Args:      args("domain validate --service-id 123 --version 3"),
 			WantError: "error parsing arguments: must provide --name flag",
 		},
 		{
@@ -276,7 +271,7 @@ func TestDomainValidate(t *testing.T) {
 					return nil, testutil.Err
 				},
 			},
-			Args:      args("domain validate --name foo.example.com --service-id 123 --token 123 --version 3"),
+			Args:      args("domain validate --name foo.example.com --service-id 123 --version 3"),
 			WantError: testutil.Err.Error(),
 		},
 		{
@@ -287,7 +282,7 @@ func TestDomainValidate(t *testing.T) {
 					return nil, testutil.Err
 				},
 			},
-			Args:      args("domain validate --all --service-id 123 --token 123 --version 3"),
+			Args:      args("domain validate --all --service-id 123 --version 3"),
 			WantError: testutil.Err.Error(),
 		},
 		{
@@ -296,7 +291,7 @@ func TestDomainValidate(t *testing.T) {
 				ListVersionsFn:   testutil.ListVersions,
 				ValidateDomainFn: validateDomain,
 			},
-			Args:       args("domain validate --name foo.example.com --service-id 123 --token 123 --version 3"),
+			Args:       args("domain validate --name foo.example.com --service-id 123 --version 3"),
 			WantOutput: validateAPISuccess(3),
 		},
 		{
@@ -305,7 +300,7 @@ func TestDomainValidate(t *testing.T) {
 				ListVersionsFn:       testutil.ListVersions,
 				ValidateAllDomainsFn: validateAllDomains,
 			},
-			Args:       args("domain validate --all --service-id 123 --token 123 --version 3"),
+			Args:       args("domain validate --all --service-id 123 --version 3"),
 			WantOutput: validateAllAPISuccess(),
 		},
 		{
@@ -314,7 +309,7 @@ func TestDomainValidate(t *testing.T) {
 				ListVersionsFn:   testutil.ListVersions,
 				ValidateDomainFn: validateDomain,
 			},
-			Args:       args("domain validate --name foo.example.com --service-id 123 --token 123 --version 1"),
+			Args:       args("domain validate --name foo.example.com --service-id 123 --version 1"),
 			WantOutput: validateAPISuccess(1),
 		},
 	}
@@ -374,7 +369,7 @@ SERVICE  VERSION  NAME             COMMENT
 `) + "\n"
 
 var listDomainsVerboseOutput = strings.TrimSpace(`
-Fastly API token not provided
+Fastly API token provided via config file (profile: user)
 Fastly API endpoint: https://api.fastly.com
 
 Service ID (via --service-id): 123

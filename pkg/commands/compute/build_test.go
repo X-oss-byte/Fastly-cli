@@ -27,7 +27,7 @@ func TestBuildRust(t *testing.T) {
 	scenarios := []struct {
 		name                 string
 		args                 []string
-		applicationConfig    config.File
+		applicationConfig    *config.File // a pointer so we can assert if configured
 		fastlyManifest       string
 		cargoManifest        string
 		wantError            string
@@ -66,7 +66,8 @@ func TestBuildRust(t *testing.T) {
 		{
 			name: "build script inserted dynamically when missing",
 			args: args("compute build --verbose"),
-			applicationConfig: config.File{
+			applicationConfig: &config.File{
+				Profiles: testutil.TokenProfile(),
 				Language: config.Language{
 					Rust: config.Rust{
 						ToolchainConstraint: ">= 1.54.0",
@@ -94,7 +95,8 @@ func TestBuildRust(t *testing.T) {
 		{
 			name: "build error",
 			args: args("compute build"),
-			applicationConfig: config.File{
+			applicationConfig: &config.File{
+				Profiles: testutil.TokenProfile(),
 				Language: config.Language{
 					Rust: config.Rust{
 						ToolchainConstraint: ">= 1.54.0",
@@ -114,15 +116,16 @@ func TestBuildRust(t *testing.T) {
 			name = "test"
 			language = "rust"
 
-      [scripts]
-      build = "echo no compilation happening"`,
+		    [scripts]
+		    build = "echo no compilation happening"`,
 			wantRemediationError: compute.DefaultBuildErrorRemediation,
 		},
 		// NOTE: This test passes --verbose so we can validate specific outputs.
 		{
 			name: "successful build",
 			args: args("compute build --verbose"),
-			applicationConfig: config.File{
+			applicationConfig: &config.File{
+				Profiles: testutil.TokenProfile(),
 				Language: config.Language{
 					Rust: config.Rust{
 						ToolchainConstraint: ">= 1.54.0",
@@ -186,7 +189,9 @@ func TestBuildRust(t *testing.T) {
 
 			var stdout threadsafe.Buffer
 			opts := testutil.NewRunOpts(testcase.args, &stdout)
-			opts.ConfigFile = testcase.applicationConfig
+			if testcase.applicationConfig != nil {
+				opts.ConfigFile = *testcase.applicationConfig
+			}
 			err = app.Run(opts)
 			t.Log(stdout.String())
 			testutil.AssertRemediationErrorContains(t, err, testcase.wantRemediationError)

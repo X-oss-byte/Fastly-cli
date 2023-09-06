@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	toml "github.com/pelletier/go-toml"
+
 	"github.com/fastly/cli/pkg/config"
 	fsterr "github.com/fastly/cli/pkg/errors"
 	"github.com/fastly/cli/pkg/testutil"
-	toml "github.com/pelletier/go-toml"
 )
 
 //go:embed testdata/static/config.toml
@@ -224,8 +225,17 @@ func TestUseStatic(t *testing.T) {
 	if strings.Contains(string(data), "[user]") {
 		t.Error("expected legacy [user] section to be removed")
 	}
-	if !strings.Contains(string(data), "[profile.user]\ndefault = true\nemail = \"testing@fastly.com\"\ntoken = \"foobar\"") {
-		t.Error("expected legacy [user] section to be migrated to [profile.user]")
+	if !strings.Contains(string(data), `[profile.user]
+access_token = ""
+access_token_created = 0
+access_token_ttl = 0
+default = true
+email = "testing@fastly.com"
+refresh_token = ""
+refresh_token_created = 0
+refresh_token_ttl = 0
+token = "foobar"`) {
+		t.Errorf("expected legacy [user] section to be migrated to [profile.user]: %s", string(data))
 	}
 
 	// Validate that invalid static configuration returns a specific error.

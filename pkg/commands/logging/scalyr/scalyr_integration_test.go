@@ -6,11 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fastly/go-fastly/v8/fastly"
+
 	"github.com/fastly/cli/pkg/app"
 	fsterrs "github.com/fastly/cli/pkg/errors"
 	"github.com/fastly/cli/pkg/mock"
 	"github.com/fastly/cli/pkg/testutil"
-	"github.com/fastly/go-fastly/v8/fastly"
 )
 
 func TestScalyrCreate(t *testing.T) {
@@ -340,7 +341,7 @@ SERVICE  VERSION  NAME
 `) + "\n"
 
 var listScalyrsVerboseOutput = strings.TrimSpace(`
-Fastly API token not provided
+Fastly API token provided via config file (profile: user)
 Fastly API endpoint: https://api.fastly.com
 
 Service ID (via --service-id): 123

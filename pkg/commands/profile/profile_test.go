@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fastly/go-fastly/v8/fastly"
+
 	"github.com/fastly/cli/pkg/app"
 	"github.com/fastly/cli/pkg/config"
 	"github.com/fastly/cli/pkg/mock"
 	"github.com/fastly/cli/pkg/testutil"
-	"github.com/fastly/go-fastly/v8/fastly"
 )
 
 // Scenario is an extension of the base TestScenario.
@@ -417,13 +418,25 @@ func TestList(t *testing.T) {
 				Args: args("profile list --json"),
 				WantOutput: `{
   "bar": {
+    "access_token": "",
+    "access_token_created": 0,
+    "access_token_ttl": 0,
     "default": false,
     "email": "bar@example.com",
+    "refresh_token": "",
+    "refresh_token_created": 0,
+    "refresh_token_ttl": 0,
     "token": "456"
   },
   "foo": {
+    "access_token": "",
+    "access_token_created": 0,
+    "access_token_ttl": 0,
     "default": false,
     "email": "foo@example.com",
+    "refresh_token": "",
+    "refresh_token_created": 0,
+    "refresh_token_ttl": 0,
     "token": "123"
   }
 }`,

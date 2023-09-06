@@ -5,10 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fastly/go-fastly/v8/fastly"
+
 	"github.com/fastly/cli/pkg/app"
 	"github.com/fastly/cli/pkg/mock"
 	"github.com/fastly/cli/pkg/testutil"
-	"github.com/fastly/go-fastly/v8/fastly"
 )
 
 func TestVersionClone(t *testing.T) {
@@ -309,7 +310,7 @@ NUMBER  ACTIVE  LAST EDITED (UTC)
 `) + "\n"
 
 var listVersionsVerboseOutput = strings.TrimSpace(`
-Fastly API token not provided
+Fastly API token provided via config file (profile: user)
 Fastly API endpoint: https://api.fastly.com
 
 Service ID (via --service-id): 123

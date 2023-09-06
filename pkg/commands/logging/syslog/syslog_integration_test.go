@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fastly/go-fastly/v8/fastly"
+
 	"github.com/fastly/cli/pkg/app"
 	"github.com/fastly/cli/pkg/mock"
 	"github.com/fastly/cli/pkg/testutil"
-	"github.com/fastly/go-fastly/v8/fastly"
 )
 
 func TestSyslogCreate(t *testing.T) {
@@ -322,7 +323,7 @@ SERVICE  VERSION  NAME
 `) + "\n"
 
 var listSyslogsVerboseOutput = strings.TrimSpace(`
-Fastly API token not provided
+Fastly API token provided via config file (profile: user)
 Fastly API endpoint: https://api.fastly.com
 
 Service ID (via --service-id): 123
@@ -333,7 +334,7 @@ Version: 1
 		Version: 1
 		Name: logs
 		Address: 127.0.0.1
-		Hostname: 
+		Hostname:
 		Port: 514
 		Use TLS: false
 		IPV4: 127.0.0.1
@@ -355,7 +356,7 @@ Version: 1
 		Hostname: example.com
 		Port: 789
 		Use TLS: true
-		IPV4: 
+		IPV4:
 		TLS CA certificate: -----BEGIN CERTIFICATE-----baz
 		TLS hostname: example.com
 		TLS client certificate: -----BEGIN CERTIFICATE-----qux

@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fastly/go-fastly/v8/fastly"
+
 	"github.com/fastly/cli/pkg/app"
 	"github.com/fastly/cli/pkg/mock"
 	"github.com/fastly/cli/pkg/testutil"
-	"github.com/fastly/go-fastly/v8/fastly"
 )
 
 func TestServiceAuthCreate(t *testing.T) {
@@ -98,7 +99,7 @@ func TestServiceAuthList(t *testing.T) {
 		{
 			args:       args("service-auth list --verbose"),
 			api:        mock.API{ListServiceAuthorizationsFn: listServiceAuthOK},
-			wantOutput: "Fastly API token not provided\nFastly API endpoint: https://api.fastly.com\n\nAuth ID: 123\nUser ID: 456\nService ID: 789\nPermission: read_only\n",
+			wantOutput: "Fastly API token provided via config file (profile: user)\nFastly API endpoint: https://api.fastly.com\n\nAuth ID: 123\nUser ID: 456\nService ID: 789\nPermission: read_only\n",
 		},
 	}
 	for testcaseIdx := range scenarios {
